@@ -1,54 +1,58 @@
 pipeline {
     agent any
 
+    tools {
+        maven '3.9.6'
+        dockerTool 'docker'
+    }
+   
+
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/scriptsorcerer04/comp367-webapp']])
             }
         }
-
+        
         stage('Build Maven Project') {
             steps {
-                script {
-                    // Set up Maven environment
-                    def mvnHome = tool 'Maven 3.9.6'
-                    def mavenHome = mvnHome
-                    def mavenCMD = "${mvnHome}/bin/mvn"
-                    
-                    // Run Maven build
-                    sh "${mavenCMD} clean package"
+                dir('comp367-webapp') {
+                    bat 'mvn clean package'
                 }
             }
         }
-
+        
         stage('Docker Build') {
             steps {
-                script {
-                    // Build Docker image
-                    docker.build("scriptsorcerer/comp367-webapp:${env.BUILD_NUMBER}")
-                }
-            }
-        }
-
-        stage('Docker Login') {
-            steps {
-                script {
-                    // Login to Docker Hub
-                    docker.withRegistry('https://registry.hub.docker.com', '1') {
-                        // No need to do anything here, just logging in is enough
+                dir('comp367-webapp') {
+                    script {
+                        def dockerImage = docker.build("scriptsorcerer04/jenkins-comp367-webapp:${env.BUILD_NUMBER}")
+        
+                        dockerImage.tag("latest")
+                      
                     }
                 }
             }
         }
-
-        stage('Docker Push') {
+        
+        stage('Docker Login') {
             steps {
                 script {
-                    // Push Docker image to Docker Hub
-                    docker.image("scriptsorcerer/comp367-webapp:${env.BUILD_NUMBER}").push()
+                    
+                    withCredentials([string(credentialsId: 'dockerhubpassword1', variable: 'dockerhubpassword')]) {
+                        bat "docker login -u scriptsorcerer04 -p ${dockerhubpassword}"
+                    }
                 }
             }
         }
+        stage ('Docker Push'){
+            steps {
+                script {
+                    bat "docker push scriptsorcerer04/jenkins-comp367-webapp:latest"
+                    
+                }
+            }
+        }
+
     }
 }
